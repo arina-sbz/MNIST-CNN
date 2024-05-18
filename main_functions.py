@@ -8,6 +8,13 @@ import seaborn as sns
 
 class NeuralNet(nn.Module):
     def __init__(self, layer_structure):
+        """
+        Initialize the neural network with the given layer structure
+
+        Parameters:
+            layer_structure: List of integers where each integer represents
+                                    the number of neurons in that layer
+        """
         super(NeuralNet, self).__init__()
         self.layers = nn.ModuleList()
 
@@ -19,6 +26,16 @@ class NeuralNet(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, x):
+        """
+        Forward pass through the network
+
+        Parameters:
+            x: Input tensor
+
+        Returns:
+            Output tensor
+        """
+        
         # Apply all layers except the last with ReLU activation
         for i in range(len(self.layers) - 1):
             x = self.layers[i](x)
@@ -30,6 +47,13 @@ class NeuralNet(nn.Module):
     
 class ConvNet(nn.Module):
     def __init__(self, layers_config):
+        """
+        Initialize the convolutional neural network with the given layer configuration
+
+        Parameters:
+            layers_config: List of dictionaries where each dictionary contains
+                                  the type and structure of the layer
+        """
         super(ConvNet, self).__init__()
         layers = []
         for layer in layers_config:
@@ -45,6 +69,26 @@ class ConvNet(nn.Module):
         return self.layers(x)    
 
 def train_model(model, train_loader, test_loader, num_epochs, learning_rate, device, isCNN, optimizer_type, use_scheduler):
+    """
+    Train the model
+    
+    Parameters:
+        model: The model to be trained
+        train_loader: DataLoader for the training data
+        test_loader: DataLoader for the testing data
+        num_epochs: The number of epochs to train the model
+        learning_rate: Learning rate for the optimizer
+        device: Device to train the model on (CPU or GPU)
+        isCNN: Boolean indicating if the model is a CNN (True) or not (False)
+        optimizer_type: Type of optimizer to use
+        use_scheduler: Boolean indicating if a learning rate scheduler should be used
+
+    Returns:
+        train_losses: List of training losses for each epoch
+        train_accuracies: List of training accuracies for each epoch
+        test_losses: List of testing losses for each epoch
+        test_accuracies: List of testing accuracies for each epoch
+    """
     train_losses = []
     train_accuracies = []
     test_losses = []
@@ -58,31 +102,30 @@ def train_model(model, train_loader, test_loader, num_epochs, learning_rate, dev
     if use_scheduler:
         scheduler = StepLR(optimizer, step_size=10, gamma=0.1)
         
-    # optimizer = torch.optim.RMSprop(model.parameters())
     for epoch in range(num_epochs):
         batch_losses = []
         batch_correct_predictions = 0
         batch_total_predictions = 0
         for i, (images, labels) in enumerate(train_loader):
+            # reshape the image
             if isCNN:
                 images = images.reshape(-1, 1, 28, 28).to(device)
             else:
                 images = images.reshape(-1, 28*28).to(device)
             true_labels = labels.to(device)
 
-            # Forward pass and loss calculation
+            # Forward pass
             predicted_labels = model(images)
             loss = loss_function(predicted_labels, true_labels)
             batch_losses.append(loss.item())
             
-            # calculate accuracy
             _, prediction_indices = torch.max(predicted_labels, 1)
             _, true_labels_indices = torch.max(true_labels, 1)
             batch_correct_predictions += (prediction_indices ==
                                     true_labels_indices).sum().item()
             batch_total_predictions += true_labels.size(0)
             
-            # Backward and optimize
+            # Backward pass and optimize
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -90,7 +133,8 @@ def train_model(model, train_loader, test_loader, num_epochs, learning_rate, dev
             if (i+1) % 100 == 0:
                 print(
                     f'For Epoch [{epoch+1}/{num_epochs}], the Loss is: {loss.item():.4f}')
-            
+                
+        # Evaluate the model on the test data    
         epoch_test_loss, epoch_test_accuracy = test_model(model, test_loader, device, isCNN, False)
         test_losses.append(epoch_test_loss)
         test_accuracies.append(epoch_test_accuracy)
@@ -98,7 +142,6 @@ def train_model(model, train_loader, test_loader, num_epochs, learning_rate, dev
         if use_scheduler:
             scheduler.step()
         
-        # storing epochs' loss and accuracy for plot
         epoch_loss = np.mean(batch_losses)
         train_losses.append(epoch_loss)
         epoch_accuracy = 100 * (batch_correct_predictions / batch_total_predictions)
@@ -107,6 +150,26 @@ def train_model(model, train_loader, test_loader, num_epochs, learning_rate, dev
     return train_losses, train_accuracies, test_losses, test_accuracies    
         
 def test_model(model, test_loader, device, isCNN, isBestModel):
+    """
+    Test the model
+
+    Parameters:
+        model: The model to be tested
+        test_loader: DataLoader for the testing data
+        device: Device to test the model on (CPU or GPU)
+        isCNN: Boolean indicating if the model is a CNN (True) or not (False)
+        isBestModel: Boolean indicating if the model is considered the best model or not
+
+    Returns:
+        If isBestModel is True:
+            true_labels_all: List of all true labels in the test set
+            predicted_labels_all: List of all predicted labels in the test set
+            misclassified_samples: List of misclassified samples with their true and predicted labels
+        Otherwise:
+            average_test_loss: Average loss over the test set
+            accuracy: Accuracy of the model on the test set
+    """    
+    
     loss_function = nn.CrossEntropyLoss()
     correct_predictions = 0
     true_labels_all = []
@@ -128,7 +191,6 @@ def test_model(model, test_loader, device, isCNN, isBestModel):
             loss = loss_function(predicted_labels, true_labels)
             test_losses.append(loss.item())
     
-            # max returns (output_value ,index)
             _, prediction_indices = torch.max(predicted_labels, 1)
             # Convert one-hot encoded labels to class indices
             _, true_labels_indices = torch.max(true_labels, 1)
@@ -159,22 +221,37 @@ def test_model(model, test_loader, device, isCNN, isBestModel):
         return average_test_loss, accuracy
 
 def show_confusion_matrix(true_labels, predictions):
+    """
+    Show the confusion matrix for the true and predicted labels
+
+    Parameters:
+        true_labels: List or array of true labels
+        predictions: List or array of predicted labels
+    """
     matrix = confusion_matrix(true_labels, predictions)
     plt.figure(figsize=(10, 8))
     sns.heatmap(matrix, annot=True, fmt="d", cmap="Blues")
     plt.title("Confusion Matrix")
     plt.xlabel("Predicted Labels")
     plt.ylabel("True Labels")
+    plt.savefig("cm.png",dpi=300) 
     plt.show()
     
 def show_misclassified_samples(misclassified_samples):
+    """
+    Show misclassified samples
+
+    Parameters:
+        misclassified_samples: List of tuples containing misclassified samples and their true and predicted labels
+    """
     plt.figure(figsize=(10, 5))
     for i, (image, true_label, predicted_label) in enumerate(misclassified_samples):
-        image = image.squeeze()  # Remove channel dimension for plotting
-        plt.subplot(2, 5, i + 1)  # Assuming you want to plot 10 samples
+        image = image.squeeze()
+        plt.subplot(2, 5, i + 1)
         plt.imshow(image.cpu().numpy(), cmap='gray')
         plt.title(f'True: {true_label}, Pred: {predicted_label}')
         plt.axis('off')
+    plt.savefig("misclassified_samples.png",dpi=300) 
     plt.show()      
 
 def training_curve_plot(title, subtitle,train_losses, test_losses, train_accuracy, test_accuracy):
